@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install Rush
         run: npm install -g @microsoft/rush@5.162.0
@@ -39,19 +39,21 @@ jobs:
     name: Publish to NPM
     needs: validate
     runs-on: ubuntu-latest
-    environment: production
+    # environment: production  # Temporarily disabled for testing
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Setup Node.js with NPM provenance
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+
+      # npm v11.5.1+ required for trusted publishing
+      - name: Update npm (v11.5.1+)
+        run: npm install -g npm@latest
 
       - name: Install Rush
         run: npm install -g @microsoft/rush@5.162.0
@@ -69,13 +71,11 @@ jobs:
           FULL_TAG=${GITHUB_REF#refs/tags/}
           PACKAGE_SHORT_NAME=${FULL_TAG%@v*}
           VERSION=${FULL_TAG#*@v}
-          PACKAGE_NAME="@voitanos/${PACKAGE_SHORT_NAME}"
 
-          echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
           echo "package_short_name=$PACKAGE_SHORT_NAME" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-          echo "Publishing package: $PACKAGE_NAME"
+          echo "Publishing package from directory: heft-plugins/${PACKAGE_SHORT_NAME}"
           echo "Version: $VERSION"
 
           # Determine NPM dist-tag based on version format
@@ -93,10 +93,19 @@ jobs:
             echo "prerelease=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Configure NPM for provenance
+      - name: Get package full name from package.json
+        id: package
         run: |
-          # Configure npm to use provenance
-          npm config set provenance true
+          cd heft-plugins/${{ steps.version.outputs.package_short_name }}
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          echo "name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "Full package name: $PACKAGE_NAME"
+
+      - name: Configure npm for OIDC authentication
+        run: |
+          npm config delete //registry.npmjs.org/:_authToken 2>/dev/null || true
+          npm config delete always-auth 2>/dev/null || true
+          npm config delete //registry.npmjs.org/:always-auth 2>/dev/null || true
 
       - name: Publish specific package to NPM with provenance
         run: |
@@ -106,7 +115,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          name: ${{ steps.version.outputs.package_name }}@${{ steps.version.outputs.version }}
+          name: ${{ steps.package.outputs.name }}@${{ steps.version.outputs.version }}
           generate_release_notes: true
           prerelease: ${{ steps.version.outputs.prerelease }}
         env:
