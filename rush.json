@@ -16,7 +16,8 @@
     {
       "packageName": "@voitanos/heft-stylelint-plugin",
       "projectFolder": "heft-plugins/heft-stylelint-plugin",
-      "reviewCategory": "plugins"
+      "reviewCategory": "plugins",
+      "versionPolicyName": "heft-stylelint-plugin-policy"
     }
   ]
 }

@@ -1,0 +1,113 @@
+name: Publish NPM Package
+
+on:
+  push:
+    tags:
+      - 'heft-*-plugin@v*.*.*'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  validate:
+    name: Validate Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Rush
+        run: npm install -g @microsoft/rush@5.162.0
+
+      - name: Install dependencies
+        run: rush update
+
+      - name: Build packages
+        run: rush rebuild --verbose
+
+      - name: Run tests
+        run: rush test
+
+  publish:
+    name: Publish to NPM
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js with NPM provenance
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install Rush
+        run: npm install -g @microsoft/rush@5.162.0
+
+      - name: Install dependencies
+        run: rush update
+
+      - name: Build packages
+        run: rush rebuild --verbose
+
+      - name: Extract package name, version, and determine dist-tag
+        id: version
+        run: |
+          # Extract from tag format: heft-stylelint-plugin@v0.1.0
+          FULL_TAG=${GITHUB_REF#refs/tags/}
+          PACKAGE_SHORT_NAME=${FULL_TAG%@v*}
+          VERSION=${FULL_TAG#*@v}
+          PACKAGE_NAME="@voitanos/${PACKAGE_SHORT_NAME}"
+
+          echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "package_short_name=$PACKAGE_SHORT_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          echo "Publishing package: $PACKAGE_NAME"
+          echo "Version: $VERSION"
+
+          # Determine NPM dist-tag based on version format
+          if [[ $VERSION =~ -beta\. ]]; then
+            echo "dist_tag=next" >> $GITHUB_OUTPUT
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          elif [[ $VERSION =~ -rc\. ]]; then
+            echo "dist_tag=next" >> $GITHUB_OUTPUT
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          elif [[ $VERSION =~ -alpha\. ]]; then
+            echo "dist_tag=next" >> $GITHUB_OUTPUT
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "dist_tag=latest" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish specific package to NPM with provenance
+        run: |
+          rush publish \
+            --publish \
+            --include-all \
+            --set-access-level public \
+            --tag ${{ steps.version.outputs.dist_tag }} \
+            --add-commit-details \
+            --npm-publish-args "--provenance --access public"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: ${{ steps.version.outputs.package_name }}@${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          prerelease: ${{ steps.version.outputs.prerelease }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
