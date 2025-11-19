@@ -4,7 +4,7 @@
   "version": "0.1.0-beta.3",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Voitanos/heft-plugins",
+    "url": "git+https://github.com/Voitanos/heft-plugins.git",
     "directory": "heft-plugins/heft-stylelint-plugin"
   },
   "license": "MIT",
