@@ -93,15 +93,15 @@ jobs:
             echo "prerelease=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Configure NPM for provenance
+        run: |
+          # Configure npm to use provenance
+          npm config set provenance true
+
       - name: Publish specific package to NPM with provenance
         run: |
-          rush publish \
-            --publish \
-            --include-all \
-            --set-access-level public \
-            --tag ${{ steps.version.outputs.dist_tag }} \
-            --add-commit-details \
-            --npm-publish-args "--provenance --access public"
+          cd heft-plugins/${{ steps.version.outputs.package_short_name }}
+          npm publish --access public --tag ${{ steps.version.outputs.dist_tag }} --provenance
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
